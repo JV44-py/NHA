@@ -6,11 +6,12 @@ if (!isset($_SESSION['user_id'])) {
 }
 include 'config.php';
 
-// Get statistics — using correct table name: tickets
+// Get statistics
 $total_tickets = mysqli_fetch_assoc(mysqli_query($conn, "SELECT COUNT(*) as count FROM tickets"))['count'];
-$open_tickets  = mysqli_fetch_assoc(mysqli_query($conn, "SELECT COUNT(*) as count FROM tickets WHERE status = 'Open'"))['count'];
+$open_tickets  = mysqli_fetch_assoc(mysqli_query($conn, "SELECT COUNT(*) as count FROM tickets WHERE status = 'Open' OR status IS NULL OR status = ''"))['count'];
 $in_progress   = mysqli_fetch_assoc(mysqli_query($conn, "SELECT COUNT(*) as count FROM tickets WHERE status = 'In-Progress'"))['count'];
 $resolved      = mysqli_fetch_assoc(mysqli_query($conn, "SELECT COUNT(*) as count FROM tickets WHERE status = 'Resolved'"))['count'];
+$closed        = mysqli_fetch_assoc(mysqli_query($conn, "SELECT COUNT(*) as count FROM tickets WHERE status = 'Closed'"))['count'];
 
 // Recent tickets
 $recent = mysqli_query($conn, "SELECT * FROM tickets ORDER BY id DESC LIMIT 5");
@@ -98,7 +99,7 @@ $recent = mysqli_query($conn, "SELECT * FROM tickets ORDER BY id DESC LIMIT 5");
         /* Stats grid */
         .stats-grid {
             display: grid;
-            grid-template-columns: repeat(4, 1fr);
+            grid-template-columns: repeat(5, 1fr);
             gap: 12px;
             margin-bottom: 28px;
         }
@@ -245,16 +246,9 @@ $recent = mysqli_query($conn, "SELECT * FROM tickets ORDER BY id DESC LIMIT 5");
 
     <div class="layout">
 
-        <!-- Sidebar -->
-        <nav class="sidebar">
-            <a href="index.php" class="active">Dashboard</a>
-            <a href="create_ticket.php">Create Ticket</a>
-            <a href="ticket_list.php">View Tickets</a>
-            <a href="logout.php">Logout</a>
-        </nav>
+        <?php include 'sidebar.php'; ?>
 
-        <!-- Main -->
-        <div class="main-content">
+    <div class="main-content">
 
             <div class="welcome-bar">
                 Welcome, <strong><?= htmlspecialchars($_SESSION['user_name'] ?? 'User') ?></strong>
@@ -279,6 +273,10 @@ $recent = mysqli_query($conn, "SELECT * FROM tickets ORDER BY id DESC LIMIT 5");
                 <div class="stat-card resolved">
                     <div class="stat-number"><?= $resolved ?></div>
                     <div class="stat-label">Resolved</div>
+                </div>
+                <div class="stat-card" style="background:#444;">
+                    <div class="stat-number"><?= $closed ?></div>
+                    <div class="stat-label">Closed</div>
                 </div>
             </div>
 
@@ -305,6 +303,11 @@ $recent = mysqli_query($conn, "SELECT * FROM tickets ORDER BY id DESC LIMIT 5");
                     <div class="action-title">High Priority</div>
                     <div class="action-desc">View high priority</div>
                 </a>
+                <a href="update_ticket.php" class="action-card">
+                    <div class="action-icon">&#x270e;</div>
+                    <div class="action-title">Update Ticket</div>
+                    <div class="action-desc">Change ticket status</div>
+                </a>
             </div>
 
             <!-- Recent Tickets -->
@@ -328,7 +331,24 @@ $recent = mysqli_query($conn, "SELECT * FROM tickets ORDER BY id DESC LIMIT 5");
                         <td><?= htmlspecialchars($row['service_request_no']) ?></td>
                         <td><?= htmlspecialchars($row['client_name']) ?></td>
                         <td><span class="badge <?= get_priority_class($row['priority_level']) ?>"><?= htmlspecialchars($row['priority_level']) ?></span></td>
-                        <td><span class="badge <?= get_status_class($row['status'] ?? 'Open') ?>"><?= htmlspecialchars($row['status'] ?? 'Open') ?></span></td>
+                        <td><?php
+                            $st = $row['status'] ?? 'Open';
+                            if (!$st) $st = 'Open';
+                            $stcls = match($st) {
+                                'Open'        => 'badge-high',
+                                'In-Progress' => 'badge-medium',
+                                'Resolved'    => 'badge-low',
+                                'Closed'      => '',
+                                default       => ''
+                            };
+                            $stbg = $st === 'Closed' ? 'display:inline-block;padding:2px 8px;font-size:10.5px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;border:1px solid #555;color:#555;background:#eee;' : '';
+                        ?>
+                        <?php if ($stbg): ?>
+                            <span style="<?= $stbg ?>"><?= htmlspecialchars($st) ?></span>
+                        <?php else: ?>
+                            <span class="badge <?= $stcls ?>"><?= htmlspecialchars($st) ?></span>
+                        <?php endif; ?>
+                        </td>
                         <td><?= htmlspecialchars($row['date_created']) ?></td>
                     </tr>
                 <?php endwhile; ?>
@@ -338,13 +358,23 @@ $recent = mysqli_query($conn, "SELECT * FROM tickets ORDER BY id DESC LIMIT 5");
                 <div class="empty-state">No tickets yet. <a href="create_ticket.php">Create the first one →</a></div>
             <?php endif; ?>
 
-        </div><!-- /main-content -->
-    </div><!-- /layout -->
+    </div><!-- /main-content -->
 
     <div class="dash-footer">
         &copy; <?= date('Y') ?> National Housing Authority IT Support System
     </div>
 
 </div><!-- /dashboard-wrap -->
+<script>
+(function(){
+    var btn=document.getElementById("sidebarToggle");
+    var sidebar=document.getElementById("sidebar");
+    var overlay=document.getElementById("sidebarOverlay");
+    function openS(){ sidebar.classList.add("open"); overlay.classList.add("active"); }
+    function closeS(){ sidebar.classList.remove("open"); overlay.classList.remove("active"); }
+    btn.addEventListener("click",function(){ sidebar.classList.contains("open")?closeS():openS(); });
+    overlay.addEventListener("click",closeS);
+})();
+</script>
 </body>
 </html>
