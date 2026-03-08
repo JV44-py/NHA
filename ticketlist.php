@@ -303,6 +303,7 @@ $total  = mysqli_num_rows($result);
     </style>
 </head>
 <body>
+    <?php include 'sidebar.php'; ?>
 <div class="list-wrapper">
 
     <h1 class="title nha">
@@ -347,6 +348,7 @@ $total  = mysqli_num_rows($result);
                     <th>Department</th>
                     <th>Type</th>
                     <th>Priority</th>
+                    <th>Status</th>
                     <th>Actions</th>
                 </tr>
             </thead>
@@ -374,6 +376,23 @@ $total  = mysqli_num_rows($result);
                         };
                         ?>
                         <span class="badge <?= $cls ?>"><?= htmlspecialchars($p) ?></span>
+                    </td>
+                    <td>
+                        <?php
+                        $st = $row['status'] ?? 'Open';
+                        $scls = match(strtolower(trim($st))) {
+                            'open'                 => 'badge-high',
+                            'in-progress'          => 'badge-medium',
+                            'for parts'            => 'badge-parts',
+                            'for replacement'      => 'badge-replacement',
+                            'endorsed to supplier' => 'badge-supplier',
+                            'unrepairable'         => 'badge-unrepairable',
+                            'resolved'             => 'badge-low',
+                            'closed'               => 'badge-closed',
+                            default                => ''
+                        };
+                        ?>
+                        <span class="badge <?= $scls ?>"><?= htmlspecialchars($st) ?></span>
                     </td>
                     <td style="display:flex;gap:6px;flex-wrap:wrap;">
                         <a href="#" class="btn-view" onclick="openModal(<?= htmlspecialchars(json_encode($row)) ?>); return false;">View</a>
@@ -480,6 +499,17 @@ function closeModal(e) {
         document.getElementById('modalOverlay').classList.remove('active');
     }
 }
+</script>
+<script>
+(function(){
+    var btn=document.getElementById("sidebarToggle");
+    var sidebar=document.getElementById("sidebar");
+    var overlay=document.getElementById("sidebarOverlay");
+    function openS(){ sidebar.classList.add("open"); overlay.classList.add("active"); }
+    function closeS(){ sidebar.classList.remove("open"); overlay.classList.remove("active"); }
+    btn.addEventListener("click",function(){ sidebar.classList.contains("open")?closeS():openS(); });
+    overlay.addEventListener("click",closeS);
+})();
 </script>
 </body>
 </html>
