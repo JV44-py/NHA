@@ -6,152 +6,199 @@ if (!isset($_SESSION['user_id'])) {
 }
 include 'config.php';
 
-// Handle delete
-if (isset($_GET['delete'])) {
-    $id = (int) $_GET['delete'];
-    mysqli_query($conn, "DELETE FROM tickets WHERE id = $id");
-    header("Location: ticket_list.php");
-    exit;
-}
+// Get statistics
+$total_tickets = mysqli_fetch_assoc(mysqli_query($conn, "SELECT COUNT(*) as count FROM tickets"))['count'];
+$open_tickets  = mysqli_fetch_assoc(mysqli_query($conn, "SELECT COUNT(*) as count FROM tickets WHERE status = 'Open' OR status IS NULL OR status = ''"))['count'];
+$in_progress   = mysqli_fetch_assoc(mysqli_query($conn, "SELECT COUNT(*) as count FROM tickets WHERE status = 'In-Progress'"))['count'];
+$resolved      = mysqli_fetch_assoc(mysqli_query($conn, "SELECT COUNT(*) as count FROM tickets WHERE status = 'Resolved'"))['count'];
+$closed        = mysqli_fetch_assoc(mysqli_query($conn, "SELECT COUNT(*) as count FROM tickets WHERE status = 'Closed'"))['count'];
 
-// Search / filter
-$search = isset($_GET['search']) ? mysqli_real_escape_string($conn, trim($_GET['search'])) : '';
-$priority_filter = isset($_GET['priority']) ? mysqli_real_escape_string($conn, $_GET['priority']) : '';
-
-$where = "WHERE 1=1";
-if ($search)          $where .= " AND (client_name LIKE '%$search%' OR service_request_no LIKE '%$search%' OR department LIKE '%$search%')";
-if ($priority_filter) $where .= " AND priority_level = '$priority_filter'";
-
-$result = mysqli_query($conn, "SELECT * FROM tickets $where ORDER BY id DESC");
-$total  = mysqli_num_rows($result);
+// Recent tickets
+$recent = mysqli_query($conn, "SELECT * FROM tickets ORDER BY id DESC LIMIT 5");
 ?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Ticket List - National Housing Authority</title>
+    <title>Dashboard - NHA IT Support</title>
     <link rel="stylesheet" href="styles.css">
     <style>
-        /* ── List-page specific styles ── */
-        .list-wrapper {
-            max-width: 1200px;
+        /* ── Dashboard-specific styles ── */
+        .dashboard-wrap {
+            max-width: 1100px;
             margin: 0 auto;
             background: #fff;
             border: 2px solid #222;
             box-shadow: 0 4px 24px rgba(0,0,0,0.18);
         }
 
-        .list-toolbar {
+        /* Sidebar */
+        .layout {
             display: flex;
-            align-items: center;
-            gap: 10px;
-            padding: 10px 14px;
-            background: #f0ede6;
-            border-bottom: 2px solid #555;
-            flex-wrap: wrap;
+            min-height: 60vh;
         }
 
-        .list-toolbar a.btn-new {
+        .sidebar {
+            width: 190px;
             background: #2a2a2a;
-            color: #fff;
+            flex-shrink: 0;
+            display: flex;
+            flex-direction: column;
+            padding: 16px 0;
+        }
+
+        .sidebar a {
+            color: #ccc;
             text-decoration: none;
-            padding: 7px 18px;
-            font-size: 12px;
-            letter-spacing: 0.08em;
-            text-transform: uppercase;
-            white-space: nowrap;
-            font-family: 'Source Serif 4', Georgia, serif;
-        }
-
-        .list-toolbar a.btn-new:hover { background: #444; }
-
-        .list-toolbar input[type="text"] {
-            flex: 1;
-            min-width: 160px;
-            padding: 6px 10px;
-            border: 1px solid #aaa;
-            font-size: 13px;
-            font-family: 'Source Sans 3', Arial, sans-serif;
-            background: #fff;
-        }
-
-        .list-toolbar select {
-            padding: 6px 10px;
-            border: 1px solid #aaa;
-            font-size: 13px;
-            background: #fff;
-            font-family: 'Source Sans 3', Arial, sans-serif;
-        }
-
-        .list-toolbar button {
-            background: #2a2a2a;
-            color: #fff;
-            border: none;
-            padding: 7px 16px;
-            font-size: 12px;
+            padding: 10px 20px;
+            font-size: 12.5px;
             letter-spacing: 0.06em;
             text-transform: uppercase;
-            cursor: pointer;
-            font-family: 'Source Serif 4', Georgia, serif;
+            border-left: 3px solid transparent;
+            transition: background 0.15s, color 0.15s;
+            font-family: 'Source Sans 3', Arial, sans-serif;
         }
 
-        .list-toolbar button:hover { background: #444; }
+        .sidebar a:hover,
+        .sidebar a.active {
+            background: #3a3a3a;
+            color: #fff;
+            border-left-color: #c9a000;
+        }
 
-        .list-toolbar .total {
-            margin-left: auto;
-            font-size: 12px;
+        /* Main content */
+        .main-content {
+            flex: 1;
+            padding: 24px;
+            background: #faf8f4;
+        }
+
+        .welcome-bar {
+            font-size: 13px;
             color: #555;
-            white-space: nowrap;
-            font-style: italic;
+            margin-bottom: 20px;
+            padding-bottom: 12px;
+            border-bottom: 1px solid #ddd;
         }
 
-        /* Table */
-        .ticket-table-wrap {
-            overflow-x: auto;
+        .welcome-bar strong { color: #222; }
+
+        /* Section headings */
+        .dash-section-title {
+            font-family: 'Source Serif 4', Georgia, serif;
+            font-size: 13px;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            color: #2a2a2a;
+            margin: 0 0 12px;
+            padding-bottom: 4px;
+            border-bottom: 2px solid #2a2a2a;
         }
 
-        table {
+        /* Stats grid */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 12px;
+            margin-bottom: 28px;
+        }
+
+        .stat-card {
+            background: #2a2a2a;
+            color: #fff;
+            padding: 18px 14px;
+            text-align: center;
+            border: 1px solid #111;
+        }
+
+        .stat-card.open     { background: #8b1a1a; }
+        .stat-card.progress { background: #7a6200; }
+        .stat-card.resolved { background: #2a6a2a; }
+
+        .stat-number {
+            font-family: 'Source Serif 4', Georgia, serif;
+            font-size: 2.4em;
+            font-weight: 700;
+            line-height: 1;
+            margin-bottom: 6px;
+        }
+
+        .stat-label {
+            font-size: 11px;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            opacity: 0.85;
+        }
+
+        /* Action cards */
+        .action-cards {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 12px;
+            margin-bottom: 28px;
+        }
+
+        .action-card {
+            background: #fff;
+            border: 1px solid #ccc;
+            padding: 18px 12px;
+            text-align: center;
+            text-decoration: none;
+            color: #222;
+            transition: background 0.15s, border-color 0.15s;
+            display: block;
+        }
+
+        .action-card:hover {
+            background: #2a2a2a;
+            color: #fff;
+            border-color: #2a2a2a;
+        }
+
+        .action-icon { font-size: 2em; margin-bottom: 8px; }
+
+        .action-title {
+            font-family: 'Source Serif 4', Georgia, serif;
+            font-size: 12.5px;
+            font-weight: 700;
+            margin-bottom: 4px;
+            letter-spacing: 0.03em;
+        }
+
+        .action-desc { font-size: 11px; opacity: 0.65; }
+        .action-card:hover .action-desc { opacity: 0.85; color: #ddd; }
+
+        /* Recent tickets table */
+        .dash-table {
             width: 100%;
             border-collapse: collapse;
             font-size: 12.5px;
+            margin-bottom: 24px;
         }
 
-        thead tr {
-            background: #2a2a2a;
-            color: #fff;
-        }
+        .dash-table thead tr { background: #2a2a2a; color: #fff; }
 
-        thead th {
-            padding: 8px 12px;
+        .dash-table thead th {
+            padding: 7px 12px;
             text-align: left;
             font-family: 'Source Serif 4', Georgia, serif;
-            font-weight: 600;
-            letter-spacing: 0.06em;
-            text-transform: uppercase;
             font-size: 11px;
-            white-space: nowrap;
+            letter-spacing: 0.07em;
+            text-transform: uppercase;
+            font-weight: 600;
         }
 
-        tbody tr {
-            border-bottom: 1px solid #e0ddd6;
-            transition: background 0.15s;
-        }
+        .dash-table tbody tr { border-bottom: 1px solid #e0ddd6; }
+        .dash-table tbody tr:nth-child(even) { background: #faf8f4; }
+        .dash-table tbody tr:hover { background: #f0ede6; }
+        .dash-table tbody td { padding: 6px 12px; }
 
-        tbody tr:nth-child(even) { background: #faf8f4; }
-        tbody tr:hover           { background: #f0ede6; }
-
-        tbody td {
-            padding: 7px 12px;
-            vertical-align: middle;
-            color: #222;
-        }
-
-        /* Priority badges */
+        /* Priority / Status badges */
         .badge {
             display: inline-block;
             padding: 2px 8px;
-            font-size: 11px;
+            font-size: 10.5px;
             font-weight: 600;
             letter-spacing: 0.05em;
             text-transform: uppercase;
@@ -163,343 +210,161 @@ $total  = mysqli_num_rows($result);
         .badge-high     { color: #b84000; border-color: #e06000; background: #fff3eb; }
         .badge-critical { color: #fff;    border-color: #a00;    background: #a00; }
 
-        /* Action buttons */
-        .btn-view {
-            display: inline-block;
-            padding: 3px 10px;
-            font-size: 11px;
-            text-decoration: none;
-            border: 1px solid #2a2a2a;
-            color: #2a2a2a;
-            background: #fff;
-            letter-spacing: 0.04em;
-            text-transform: uppercase;
-            transition: background 0.15s, color 0.15s;
-        }
-        .btn-view:hover { background: #2a2a2a; color: #fff; }
-
-        .btn-delete {
-            display: inline-block;
-            padding: 3px 10px;
-            font-size: 11px;
-            text-decoration: none;
-            border: 1px solid #a00;
-            color: #a00;
-            background: #fff;
-            letter-spacing: 0.04em;
-            text-transform: uppercase;
-            transition: background 0.15s, color 0.15s;
-            cursor: pointer;
-        }
-        .btn-delete:hover { background: #a00; color: #fff; }
-
-        .no-results {
+        /* Empty state */
+        .empty-state {
             text-align: center;
             padding: 40px;
             color: #888;
             font-style: italic;
-            font-size: 14px;
         }
 
-        /* Modal overlay for view */
-        .modal-overlay {
-            display: none;
-            position: fixed;
-            inset: 0;
-            background: rgba(0,0,0,0.55);
-            z-index: 100;
-            justify-content: center;
-            align-items: flex-start;
-            padding: 40px 20px;
-            overflow-y: auto;
-        }
-        .modal-overlay.active { display: flex; }
-
-        .modal {
-            background: #fff;
-            border: 2px solid #222;
-            max-width: 760px;
-            width: 100%;
-            box-shadow: 0 8px 40px rgba(0,0,0,0.3);
-        }
-
-        .modal-header {
-            background: #2a2a2a;
-            color: #fff;
-            padding: 10px 16px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            font-family: 'Source Serif 4', Georgia, serif;
-            font-size: 13px;
-            letter-spacing: 0.08em;
-            text-transform: uppercase;
-        }
-
-        .modal-close {
-            background: none;
-            border: none;
-            color: #fff;
-            font-size: 20px;
-            cursor: pointer;
-            line-height: 1;
-        }
-
-        .modal-body {
-            padding: 16px;
-        }
-
-        .modal-grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 0;
-            border: 1px solid #ccc;
-        }
-
-        .modal-field {
-            display: flex;
-            border-bottom: 1px solid #e0ddd6;
-            border-right: 1px solid #e0ddd6;
-        }
-
-        .modal-field:nth-child(even) { border-right: none; }
-
-        .modal-field.full {
-            grid-column: 1 / -1;
-            border-right: none;
-        }
-
-        .modal-field label {
+        /* Footer */
+        .dash-footer {
+            text-align: center;
+            font-size: 11px;
+            color: #999;
+            padding: 12px;
+            border-top: 1px solid #ddd;
             background: #f0ede6;
-            font-weight: 600;
-            font-size: 11px;
-            text-transform: uppercase;
-            letter-spacing: 0.04em;
-            padding: 5px 10px;
-            min-width: 130px;
-            border-right: 1px solid #ccc;
-            color: #444;
-            display: flex;
-            align-items: center;
         }
 
-        .modal-field span {
-            padding: 5px 10px;
-            font-size: 12.5px;
-            color: #111;
-            flex: 1;
-        }
-
-        .modal-section-head {
-            grid-column: 1 / -1;
-            background: #2a2a2a;
-            color: #fff;
-            font-family: 'Source Serif 4', Georgia, serif;
-            font-size: 11px;
-            letter-spacing: 0.1em;
-            text-transform: uppercase;
-            padding: 5px 10px;
+        @media (max-width: 750px) {
+            .layout { flex-direction: column; }
+            .sidebar { width: 100%; flex-direction: row; flex-wrap: wrap; padding: 8px; }
+            .sidebar a { border-left: none; border-bottom: 2px solid transparent; padding: 8px 12px; }
+            .stats-grid, .action-cards { grid-template-columns: 1fr 1fr; }
         }
     </style>
 </head>
 <body>
-    <?php include 'sidebar.php'; ?>
-<div class="list-wrapper">
+<div class="dashboard-wrap">
 
     <h1 class="title nha">
         National Housing Authority
-        <sub>IT Support — Ticket List</sub>
+        <sub>IT Support Dashboard</sub>
     </h1>
 
-    <!-- Toolbar -->
-    <form method="GET" action="ticket_list.php">
-        <div class="list-toolbar">
-            <a href="create_ticket.php" class="btn-new">+ New Ticket</a>
+    <div class="layout">
 
-            <input type="text" name="search" placeholder="Search by name, request no., dept…"
-                   value="<?= htmlspecialchars($search) ?>">
+        <?php include 'sidebar.php'; ?>
 
-            <select name="priority">
-                <option value="">All Priorities</option>
-                <option value="Low"      <?= $priority_filter === 'Low'      ? 'selected' : '' ?>>Low</option>
-                <option value="Medium"   <?= $priority_filter === 'Medium'   ? 'selected' : '' ?>>Medium</option>
-                <option value="High"     <?= $priority_filter === 'High'     ? 'selected' : '' ?>>High</option>
-                <option value="Critical" <?= $priority_filter === 'Critical' ? 'selected' : '' ?>>Critical</option>
-            </select>
+    <div class="main-content">
 
-            <button type="submit">Filter</button>
-            <?php if ($search || $priority_filter): ?>
-                <a href="ticket_list.php" style="font-size:12px;color:#a00;text-decoration:none;">✕ Clear</a>
-            <?php endif; ?>
+            <div class="welcome-bar">
+                Welcome, <strong><?= htmlspecialchars($_SESSION['user_name'] ?? 'User') ?></strong>
+                &nbsp;·&nbsp; <?= date('F d, Y') ?>
+            </div>
 
-            <span class="total"><?= $total ?> ticket<?= $total !== 1 ? 's' : '' ?></span>
-        </div>
-    </form>
+            <!-- Stats -->
+            <p class="dash-section-title">Quick Statistics</p>
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-number"><?= $total_tickets ?></div>
+                    <div class="stat-label">Total Tickets</div>
+                </div>
+                <div class="stat-card open">
+                    <div class="stat-number"><?= $open_tickets ?></div>
+                    <div class="stat-label">Open</div>
+                </div>
+                <div class="stat-card progress">
+                    <div class="stat-number"><?= $in_progress ?></div>
+                    <div class="stat-label">In Progress</div>
+                </div>
+                <div class="stat-card resolved">
+                    <div class="stat-number"><?= $resolved ?></div>
+                    <div class="stat-label">Resolved</div>
+                </div>
+                <div class="stat-card" style="background:#444;">
+                    <div class="stat-number"><?= $closed ?></div>
+                    <div class="stat-label">Closed</div>
+                </div>
+            </div>
 
-    <!-- Table -->
-    <div class="ticket-table-wrap">
-        <table>
-            <thead>
-                <tr>
-                    <th>#</th>
-                    <th>Request No.</th>
-                    <th>Date</th>
-                    <th>Client Name</th>
-                    <th>Department</th>
-                    <th>Type</th>
-                    <th>Priority</th>
-                    <th>Status</th>
-                    <th>Actions</th>
-                </tr>
-            </thead>
-            <tbody>
-            <?php if ($total === 0): ?>
-                <tr><td colspan="8" class="no-results">No tickets found.</td></tr>
-            <?php else: ?>
-                <?php while ($row = mysqli_fetch_assoc($result)): ?>
-                <tr>
-                    <td><?= $row['id'] ?></td>
-                    <td><?= htmlspecialchars($row['service_request_no']) ?></td>
-                    <td><?= htmlspecialchars($row['date_created']) ?></td>
-                    <td><?= htmlspecialchars($row['client_name']) ?></td>
-                    <td><?= htmlspecialchars($row['department']) ?></td>
-                    <td><?= htmlspecialchars($row['type']) ?></td>
-                    <td>
-                        <?php
-                        $p = $row['priority_level'];
-                        $cls = match(strtolower($p)) {
-                            'low'      => 'badge-low',
-                            'medium'   => 'badge-medium',
-                            'high'     => 'badge-high',
-                            'critical' => 'badge-critical',
-                            default    => ''
-                        };
+            <!-- Quick Actions -->
+            <p class="dash-section-title">Quick Actions</p>
+            <div class="action-cards">
+                <a href="create_ticket.php" class="action-card">
+                    <div class="action-icon">🎫</div>
+                    <div class="action-title">New Ticket</div>
+                    <div class="action-desc">Submit a support request</div>
+                </a>
+                <a href="ticket_list.php" class="action-card">
+                    <div class="action-icon">📋</div>
+                    <div class="action-title">All Tickets</div>
+                    <div class="action-desc">Browse all tickets</div>
+                </a>
+                <a href="ticket_list.php?priority=Critical" class="action-card">
+                    <div class="action-icon">🔴</div>
+                    <div class="action-title">Critical</div>
+                    <div class="action-desc">View critical priority</div>
+                </a>
+                <a href="ticket_list.php?priority=High" class="action-card">
+                    <div class="action-icon">🔧</div>
+                    <div class="action-title">High Priority</div>
+                    <div class="action-desc">View high priority</div>
+                </a>
+                <a href="update_ticket.php" class="action-card">
+                    <div class="action-icon">&#x270e;</div>
+                    <div class="action-title">Update Ticket</div>
+                    <div class="action-desc">Change ticket status</div>
+                </a>
+            </div>
+
+            <!-- Recent Tickets -->
+            <p class="dash-section-title">Recent Tickets</p>
+            <?php if (mysqli_num_rows($recent) > 0): ?>
+            <table class="dash-table">
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>Request No.</th>
+                        <th>Client Name</th>
+                        <th>Priority</th>
+                        <th>Status</th>
+                        <th>Date</th>
+                    </tr>
+                </thead>
+                <tbody>
+                <?php while ($row = mysqli_fetch_assoc($recent)): ?>
+                    <tr>
+                        <td><?= $row['id'] ?></td>
+                        <td><?= htmlspecialchars($row['service_request_no']) ?></td>
+                        <td><?= htmlspecialchars($row['client_name']) ?></td>
+                        <td><span class="badge <?= get_priority_class($row['priority_level']) ?>"><?= htmlspecialchars($row['priority_level']) ?></span></td>
+                        <td><?php
+                            $st = $row['status'] ?? 'Open';
+                            if (!$st) $st = 'Open';
+                            $stcls = match($st) {
+                                'Open'        => 'badge-high',
+                                'In-Progress' => 'badge-medium',
+                                'Resolved'    => 'badge-low',
+                                'Closed'      => '',
+                                default       => ''
+                            };
+                            $stbg = $st === 'Closed' ? 'display:inline-block;padding:2px 8px;font-size:10.5px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;border:1px solid #555;color:#555;background:#eee;' : '';
                         ?>
-                        <span class="badge <?= $cls ?>"><?= htmlspecialchars($p) ?></span>
-                    </td>
-                    <td>
-                        <?php
-                        $st = $row['status'] ?? 'Open';
-                        $scls = match(strtolower(trim($st))) {
-                            'open'                 => 'badge-high',
-                            'in-progress'          => 'badge-medium',
-                            'for parts'            => 'badge-parts',
-                            'for replacement'      => 'badge-replacement',
-                            'endorsed to supplier' => 'badge-supplier',
-                            'unrepairable'         => 'badge-unrepairable',
-                            'resolved'             => 'badge-low',
-                            'closed'               => 'badge-closed',
-                            default                => ''
-                        };
-                        ?>
-                        <span class="badge <?= $scls ?>"><?= htmlspecialchars($st) ?></span>
-                    </td>
-                    <td style="display:flex;gap:6px;flex-wrap:wrap;">
-                        <a href="#" class="btn-view" onclick="openModal(<?= htmlspecialchars(json_encode($row)) ?>); return false;">View</a>
-                        <a href="ticket_list.php?delete=<?= $row['id'] ?>"
-                           class="btn-delete"
-                           onclick="return confirm('Delete this ticket?')">Delete</a>
-                    </td>
-                </tr>
+                        <?php if ($stbg): ?>
+                            <span style="<?= $stbg ?>"><?= htmlspecialchars($st) ?></span>
+                        <?php else: ?>
+                            <span class="badge <?= $stcls ?>"><?= htmlspecialchars($st) ?></span>
+                        <?php endif; ?>
+                        </td>
+                        <td><?= htmlspecialchars($row['date_created']) ?></td>
+                    </tr>
                 <?php endwhile; ?>
+                </tbody>
+            </table>
+            <?php else: ?>
+                <div class="empty-state">No tickets yet. <a href="create_ticket.php">Create the first one →</a></div>
             <?php endif; ?>
-            </tbody>
-        </table>
+
+    </div><!-- /main-content -->
+
+    <div class="dash-footer">
+        &copy; <?= date('Y') ?> National Housing Authority IT Support System
     </div>
 
-</div><!-- /list-wrapper -->
-
-<!-- VIEW MODAL -->
-<div class="modal-overlay" id="modalOverlay" onclick="closeModal(event)">
-    <div class="modal" id="modalBox">
-        <div class="modal-header">
-            <span>Ticket Details</span>
-            <button class="modal-close" onclick="document.getElementById('modalOverlay').classList.remove('active')">&times;</button>
-        </div>
-        <div class="modal-body">
-            <div class="modal-grid" id="modalGrid"></div>
-        </div>
-    </div>
-</div>
-
-<script>
-function openModal(row) {
-    const grid = document.getElementById('modalGrid');
-    const f = (label, val) => `
-        <div class="modal-field">
-            <label>${label}</label>
-            <span>${val || '—'}</span>
-        </div>`;
-    const fFull = (label, val) => `
-        <div class="modal-field full">
-            <label>${label}</label>
-            <span>${val || '—'}</span>
-        </div>`;
-    const head = (title) => `<div class="modal-section-head">${title}</div>`;
-
-    grid.innerHTML =
-        head('Client Information') +
-        f('Request No.', row.service_request_no) +
-        f('Date', row.date_created) +
-        fFull('Department', row.department) +
-        f('Client Name', row.client_name) +
-        f('Position', row.position_designation) +
-        f('Contact', row.contact_number) +
-        f('Email', row.email) +
-        f('Priority', row.priority_level) +
-
-        head('Hardware / Item') +
-        f('Type', row.type) +
-        f('Brand / Model', row.brand_model) +
-        f('Warranty', row.warranty) +
-        f('Property No.', row.property_number) +
-        f('Serial No.', row.serial_number) +
-        f('Year Acquired', row.year_acquired) +
-        f('Active Directory', row.active_directory) +
-        f('Memory Type', row.memory_type) +
-        f('Memory Speed', row.memory_speed) +
-        f('Storage Type', row.storage_type) +
-
-        head('Support Type') +
-        f('Support Type', row.support_type) +
-        f('Hardware', [
-            row.hw_install  == 1 ? 'Installation'           : '',
-            row.hw_repair   == 1 ? 'Repair'                 : '',
-            row.hw_assembly == 1 ? 'Assembly'               : '',
-            row.hw_pm       == 1 ? 'Preventive Maintenance' : '',
-            row.hw_others   == 1 ? 'Others'                 : '',
-        ].filter(Boolean).join(', ') || '—') +
-        f('Software', [
-            row.sw_install == 1 ? 'Installation' : '',
-            row.sw_repair  == 1 ? 'Repair'       : '',
-            row.sw_update  == 1 ? 'Updating'     : '',
-            row.sw_format  == 1 ? 'Formatting'   : '',
-            row.sw_others  == 1 ? 'Others'       : '',
-        ].filter(Boolean).join(', ') || '—') +
-        f('Network & Maint.', [
-            row.nm_vc     == 1 ? 'Video Conferencing'  : '',
-            row.nm_tu     == 1 ? 'Tune-up/OS Updating' : '',
-            row.nm_vs     == 1 ? 'Virus Scanning'      : '',
-            row.nm_ns     == 1 ? 'Network/Sharing'     : '',
-            row.nm_others == 1 ? 'Others'              : '',
-        ].filter(Boolean).join(', ') || '—') +
-
-        head('Resolution') +
-        fFull('Details / Scenario', row.details) +
-        fFull('Diagnosis', row.diagnosis) +
-        fFull('Actions Taken', row.actions_taken) +
-        fFull('Technical Personnel', row.tech_personnel) +
-        fFull('Accepted By', row.accepted_by);
-
-    document.getElementById('modalOverlay').classList.add('active');
-}
-
-function closeModal(e) {
-    if (e.target === document.getElementById('modalOverlay')) {
-        document.getElementById('modalOverlay').classList.remove('active');
-    }
-}
-</script>
+</div><!-- /dashboard-wrap -->
 <script>
 (function(){
     var btn=document.getElementById("sidebarToggle");
