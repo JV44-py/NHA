@@ -99,6 +99,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
+    <?php include 'sidebar.php'; ?>
 <div class="page-wrapper">
 
     <h1 class="title nha">
@@ -315,5 +316,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     </form>
 </div>
+<script>
+(function(){
+    var btn=document.getElementById("sidebarToggle");
+    var sidebar=document.getElementById("sidebar");
+    var overlay=document.getElementById("sidebarOverlay");
+    function openS(){ sidebar.classList.add("open"); overlay.classList.add("active"); }
+    function closeS(){ sidebar.classList.remove("open"); overlay.classList.remove("active"); }
+    btn.addEventListener("click",function(){ sidebar.classList.contains("open")?closeS():openS(); });
+    overlay.addEventListener("click",closeS);
+})();
+</script>
 </body>
 </html>
