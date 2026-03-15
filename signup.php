@@ -1,4 +1,4 @@
 <?php
-// simply forward to login page with signup panel
+// Redirect to login page with the signup panel pre-opened
 header('Location: login.php?signup=1');
 exit;

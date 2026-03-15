@@ -1,6 +1,5 @@
 <?php
 session_start();
-// if already logged in, send to dashboard
 if (isset($_SESSION['user_id'])) {
     header('Location: index.php');
     exit;
@@ -8,14 +7,14 @@ if (isset($_SESSION['user_id'])) {
 
 include 'config.php';
 
-$error_message = '';
+$error_message   = '';
 $success_message = '';
-$showSignup = false;
+$active_panel    = 'login'; // 'login' or 'signup'
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+
     if (isset($_POST['action']) && $_POST['action'] === 'login') {
-        // login attempt
-        $email = filter_input(INPUT_POST, 'email', FILTER_VALIDATE_EMAIL);
+        $email    = filter_input(INPUT_POST, 'email', FILTER_VALIDATE_EMAIL);
         $password = $_POST['password'] ?? '';
 
         if (!$email || empty($password)) {
@@ -40,19 +39,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
             $stmt->close();
         }
+
     } elseif (isset($_POST['action']) && $_POST['action'] === 'register') {
-        $showSignup = true;
-        $name     = sanitize($_POST['name'] ?? '');
+        $active_panel = 'signup';
+        $name     = trim($_POST['name'] ?? '');
         $email    = filter_input(INPUT_POST, 'email', FILTER_VALIDATE_EMAIL);
         $password = $_POST['password'] ?? '';
         $confirm  = $_POST['confirm_password'] ?? '';
 
         if (empty($name) || !$email || empty($password) || empty($confirm)) {
-            $error_message = 'All fields are required for signup.';
+            $error_message = 'All fields are required.';
         } elseif ($password !== $confirm) {
             $error_message = 'Passwords do not match.';
         } else {
-            // check existing email
             $stmt = $conn->prepare('SELECT id FROM users WHERE email = ?');
             $stmt->bind_param('s', $email);
             $stmt->execute();
@@ -60,13 +59,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if ($stmt->num_rows > 0) {
                 $error_message = 'That email address is already registered.';
             } else {
-                $hash = password_hash($password, PASSWORD_DEFAULT);
+                $hash  = password_hash($password, PASSWORD_DEFAULT);
                 $stmt2 = $conn->prepare('INSERT INTO users (name, email, password) VALUES (?, ?, ?)');
                 $stmt2->bind_param('sss', $name, $email, $hash);
                 if ($stmt2->execute()) {
-                    $success_message = 'Registration successful! Please log in below.';
-                    // after successful signup we want to show login front side
-                    $showSignup = false;
+                    $success_message = 'Registration successful! You may now log in.';
+                    $active_panel    = 'login';
                 } else {
                     $error_message = 'Error creating account: ' . $conn->error;
                 }
@@ -77,9 +75,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
-// if requested via GET with ?signup, show signup side
 if (isset($_GET['signup'])) {
-    $showSignup = true;
+    $active_panel = 'signup';
 }
 ?>
 <!DOCTYPE html>
@@ -87,87 +84,102 @@ if (isset($_GET['signup'])) {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Login / Sign Up - HR IT Support</title>
-    <link rel="stylesheet" href="style.css">
+    <title>Login — NHA IT Support</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,400;8..60,600;8..60,700&family=Source+Sans+3:wght@300;400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-    <div class="container">
-        <header>
-            <h1>🔒 Welcome</h1>
-            <p>Please sign in or create an account</p>
-        </header>
 
-        <?php if ($error_message): ?>
-            <div class="alert alert-error"><?php echo $error_message; ?></div>
-        <?php endif; ?>
-        <?php if ($success_message): ?>
-            <div class="alert alert-success"><?php echo $success_message; ?></div>
-        <?php endif; ?>
+<div class="login-shell">
 
-        <div class="auth-wrapper">
-            <div id="auth-card" class="auth-card<?php echo $showSignup ? ' show-signup' : ''; ?>">
-                <!-- login front -->
-                <div class="auth-front">
-                    <form method="POST">
-                        <input type="hidden" name="action" value="login">
-                        <div class="form-group">
-                            <label for="email">Email</label>
-                            <input type="email" id="email" name="email" required>
-                        </div>
-                        <div class="form-group">
-                            <label for="password">Password</label>
-                            <input type="password" id="password" name="password" required>
-                        </div>
-                        <button type="submit">Log In</button>
-                    </form>
-                    <div class="auth-switch">
-                        <span>Don't have an account?</span> <a href="#" id="to-signup">Sign up</a>
-                    </div>
-                </div>
+    <div style="width:100%; max-width:400px; position:relative; z-index:1;">
 
-                <!-- signup back -->
-                <div class="auth-back">
-                    <form method="POST">
-                        <input type="hidden" name="action" value="register">
-                        <div class="form-group">
-                            <label for="name">Full Name</label>
-                            <input type="text" id="name" name="name" required>
-                        </div>
-                        <div class="form-group">
-                            <label for="email2">Email</label>
-                            <input type="email" id="email2" name="email" required>
-                        </div>
-                        <div class="form-group">
-                            <label for="password2">Password</label>
-                            <input type="password" id="password2" name="password" required>
-                        </div>
-                        <div class="form-group">
-                            <label for="confirm_password">Confirm Password</label>
-                            <input type="password" id="confirm_password" name="confirm_password" required>
-                        </div>
-                        <button type="submit">Sign Up</button>
-                    </form>
-                    <div class="auth-switch">
-                        <span>Already have an account?</span> <a href="#" id="to-login">Log in</a>
-                    </div>
-                </div>
+        <div class="login-box">
+            <div class="login-box-header">
+                <div class="login-eyebrow">National Housing Authority</div>
+                <h1>IT Support System</h1>
+                <p>Sign in to manage support tickets</p>
             </div>
-        </div>
 
-        <div class="footer">
-            <p>&copy; 2026 HR IT Support System. All rights reserved.</p>
+            <div class="login-body">
+
+                <?php if ($error_message): ?>
+                    <div class="alert alert-error" style="margin-bottom:16px;"><?= htmlspecialchars($error_message) ?></div>
+                <?php endif; ?>
+                <?php if ($success_message): ?>
+                    <div class="alert alert-success" style="margin-bottom:16px;"><?= htmlspecialchars($success_message) ?></div>
+                <?php endif; ?>
+
+                <div class="auth-panels">
+
+                    <!-- LOGIN PANEL -->
+                    <div class="auth-panel <?= $active_panel === 'login' ? 'active' : '' ?>" id="panel-login">
+                        <form method="POST" autocomplete="off">
+                            <input type="hidden" name="action" value="login">
+                            <div class="form-group">
+                                <label for="login-email">Email Address</label>
+                                <input type="email" id="login-email" name="email" required placeholder="you@nha.gov.ph">
+                            </div>
+                            <div class="form-group">
+                                <label for="login-password">Password</label>
+                                <input type="password" id="login-password" name="password" required placeholder="••••••••">
+                            </div>
+                            <button type="submit" class="login-btn">Sign In →</button>
+                        </form>
+                        <div class="auth-switch">
+                            Don't have an account?
+                            <a href="#" onclick="showPanel('signup'); return false;">Create one</a>
+                        </div>
+                    </div>
+
+                    <!-- SIGNUP PANEL -->
+                    <div class="auth-panel <?= $active_panel === 'signup' ? 'active' : '' ?>" id="panel-signup">
+                        <form method="POST" autocomplete="off">
+                            <input type="hidden" name="action" value="register">
+                            <div class="form-group">
+                                <label for="reg-name">Full Name</label>
+                                <input type="text" id="reg-name" name="name" required placeholder="Juan dela Cruz">
+                            </div>
+                            <div class="form-group">
+                                <label for="reg-email">Email Address</label>
+                                <input type="email" id="reg-email" name="email" required placeholder="you@nha.gov.ph">
+                            </div>
+                            <div class="form-group">
+                                <label for="reg-password">Password</label>
+                                <input type="password" id="reg-password" name="password" required placeholder="••••••••">
+                            </div>
+                            <div class="form-group">
+                                <label for="reg-confirm">Confirm Password</label>
+                                <input type="password" id="reg-confirm" name="confirm_password" required placeholder="••••••••">
+                            </div>
+                            <button type="submit" class="login-btn">Create Account →</button>
+                        </form>
+                        <div class="auth-switch">
+                            Already have an account?
+                            <a href="#" onclick="showPanel('login'); return false;">Sign in</a>
+                        </div>
+                    </div>
+
+                </div><!-- /auth-panels -->
+            </div><!-- /login-body -->
+        </div><!-- /login-box -->
+
+        <div class="login-footer">
+            &copy; <?= date('Y') ?> National Housing Authority · IT Support System
         </div>
     </div>
 
-    <script>
-    document.getElementById('to-signup').addEventListener('click', function(e) {
-        e.preventDefault();
-        document.getElementById('auth-card').classList.add('show-signup');
+</div>
+
+<script>
+function showPanel(name) {
+    document.querySelectorAll('.auth-panel').forEach(function(p) {
+        p.classList.remove('active');
     });
-    document.getElementById('to-login').addEventListener('click', function(e) {
-        e.preventDefault();
-        document.getElementById('auth-card').classList.remove('show-signup');
-    });
-    </script>
+    document.getElementById('panel-' + name).classList.add('active');
+}
+</script>
 </body>
 </html>
